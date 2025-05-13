@@ -2,6 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 import csv
 import time
+import random
 
 BASE_URL = "https://www.livcheers.com"
 CITY = "bangalore"
@@ -22,11 +23,26 @@ CATEGORIES = [
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
 
 
+def get_with_retries(
+    url: str, headers: dict, max_retries: int = 5
+) -> requests.Response:
+    delay = 1
+    for attempt in range(max_retries):
+        try:
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()
+            return response
+        except requests.exceptions.RequestException as e:
+            if attempt == max_retries - 1:
+                raise e
+            time.sleep(delay + random.uniform(0, 1))
+            delay *= 2
+
+
 def fetch_product_details(slug: str) -> dict:
     """Fetch image_url, botanicals, description, tasting_notes, and type."""
     url = f"{BASE_URL}/{CITY}/liquor/{slug}"
-    resp = requests.get(url, headers=HEADERS)
-    resp.raise_for_status()
+    resp = get_with_retries(url, headers=HEADERS)
     soup = BeautifulSoup(resp.text, "html.parser")
 
     # 1) Image URL: /html/body/main/div[1]/div[1]/img
@@ -81,8 +97,7 @@ def fetch_product_details(slug: str) -> dict:
 def scrape_category(cat_slug: str) -> list[dict]:
     """Scrape the category overview and enrich with detailed page data."""
     url = f"{BASE_URL}/{CITY}/category/{cat_slug}"
-    resp = requests.get(url, headers=HEADERS)
-    resp.raise_for_status()
+    resp = get_with_retries(url, headers=HEADERS)
     soup = BeautifulSoup(resp.text, "html.parser")
 
     items = []
